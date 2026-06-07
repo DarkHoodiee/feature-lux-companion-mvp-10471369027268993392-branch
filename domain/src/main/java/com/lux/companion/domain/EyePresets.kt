@@ -1,60 +1,54 @@
 package com.lux.companion.domain
 
 object EyePresets {
+    // A stable, slightly rounded capsule.
     val NEUTRAL = EyeGeometry(
         width = 120f,
-        height = 150f,
+        height = 160f,
         upperCurve = 1.0f,
         lowerCurve = 1.0f,
-        innerCompression = 0.1f,
-        outerCompression = 0.1f
+        innerCompression = 0.05f,
+        outerCompression = 0.05f
     )
 
+    // Curiosity is about openness and investigation. Taller, softer, less angular.
     val CURIOUS = EyeGeometry(
-        width = 130f,
-        height = 140f,
-        upperCurve = 1.2f,
-        lowerCurve = 0.8f,
+        width = 135f,
+        height = 180f,
+        upperCurve = 1.1f,
+        lowerCurve = 0.9f,
         innerCompression = 0.0f,
-        outerCompression = 0.4f,
-        tilt = -10f
+        outerCompression = 0.0f,
+        tilt = -8f
     )
 
+    // Focus is a deformation of the capsule, flattened and squinting.
     val FOCUSED = EyeGeometry(
-        width = 140f,
-        height = 80f,
-        upperCurve = 0.3f,
-        lowerCurve = 0.3f,
-        innerCompression = 0.5f,
-        outerCompression = 0.5f
-    )
-
-    val HAPPY = EyeGeometry(
-        width = 130f,
-        height = 120f,
-        upperCurve = 1.5f,
-        lowerCurve = 0.2f,
-        innerCompression = 0.2f,
-        outerCompression = 0.2f
-    )
-
-    val SLEEPY = EyeGeometry(
-        width = 110f,
-        height = 60f,
-        upperCurve = 0.1f,
-        lowerCurve = 0.8f,
+        width = 150f,
+        height = 70f,
+        upperCurve = 0.4f,
+        lowerCurve = 0.4f,
         innerCompression = 0.3f,
         outerCompression = 0.3f
     )
 
-    val ANNOYED = EyeGeometry(
+    // Happy is the bottom edge lifting up while the top stays soft.
+    val HAPPY = EyeGeometry(
         width = 130f,
-        height = 100f,
-        upperCurve = 0.2f,
-        lowerCurve = 0.5f,
-        innerCompression = 0.6f,
-        outerCompression = 0.1f,
-        shear = 0.2f
+        height = 110f,
+        upperCurve = 1.2f,
+        lowerCurve = 0.1f, // The "lift"
+        innerCompression = 0.1f,
+        outerCompression = 0.1f
+    )
+
+    val SLEEPY = EyeGeometry(
+        width = 115f,
+        height = 50f,
+        upperCurve = 0.1f,
+        lowerCurve = 0.6f,
+        innerCompression = 0.2f,
+        outerCompression = 0.2f
     )
 }
 
@@ -64,6 +58,5 @@ fun LuxExpression.toGeometry(): EyeGeometry = when (this) {
     LuxExpression.FOCUSED -> EyePresets.FOCUSED
     LuxExpression.HAPPY -> EyePresets.HAPPY
     LuxExpression.SLEEPY -> EyePresets.SLEEPY
-    LuxExpression.ANNOYED -> EyePresets.ANNOYED
     else -> EyePresets.NEUTRAL
 }

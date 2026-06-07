@@ -15,16 +15,24 @@ class AutonomousEngine(
     private val _state = MutableStateFlow(LuxFaceState())
     val state: StateFlow<LuxFaceState> = _state.asStateFlow()
 
-    // Physics Solvers for different properties
+    // Physics Solvers for movement
     private val lookXSpring = SpringSolver(stiffness = 120f, dampingRatio = 0.6f)
     private val lookYSpring = SpringSolver(stiffness = 120f, dampingRatio = 0.6f)
 
-    // Geometry morphing targets
+    // Physics Solvers for geometry parameters
+    private val widthSpring = SpringSolver(stiffness = 180f, dampingRatio = 0.75f)
+    private val heightSpring = SpringSolver(stiffness = 180f, dampingRatio = 0.75f)
+    private val upperCurveSpring = SpringSolver(stiffness = 150f, dampingRatio = 0.7f)
+    private val lowerCurveSpring = SpringSolver(stiffness = 150f, dampingRatio = 0.7f)
+    private val innerCompSpring = SpringSolver(stiffness = 150f, dampingRatio = 0.7f)
+    private val outerCompSpring = SpringSolver(stiffness = 150f, dampingRatio = 0.7f)
+    private val tiltSpring = SpringSolver(stiffness = 120f, dampingRatio = 0.65f)
+    private val shearSpring = SpringSolver(stiffness = 120f, dampingRatio = 0.65f)
+
     private var targetGeom = EyePresets.NEUTRAL
     private var targetLookX = 0f
     private var targetLookY = 0f
 
-    // Flag to pause the idle loop during a high-priority reaction
     private var isReacting = false
 
     init {
@@ -46,8 +54,18 @@ class AutonomousEngine(
                     val newLookX = lookXSpring.next(currentState.leftEye.lookAtX, targetLookX, dt)
                     val newLookY = lookYSpring.next(currentState.leftEye.lookAtY, targetLookY, dt)
 
-                    // Simple LERP for geometry in this milestone, but driven by the ticker
-                    val newGeom = currentState.leftEye.geometry.lerp(targetGeom, 0.15f)
+                    val currentGeom = currentState.leftEye.geometry
+
+                    val newGeom = EyeGeometry(
+                        width = widthSpring.next(currentGeom.width, targetGeom.width, dt),
+                        height = heightSpring.next(currentGeom.height, targetGeom.height, dt),
+                        upperCurve = upperCurveSpring.next(currentGeom.upperCurve, targetGeom.upperCurve, dt),
+                        lowerCurve = lowerCurveSpring.next(currentGeom.lowerCurve, targetGeom.lowerCurve, dt),
+                        innerCompression = innerCompSpring.next(currentGeom.innerCompression, targetGeom.innerCompression, dt),
+                        outerCompression = outerCompSpring.next(currentGeom.outerCompression, targetGeom.outerCompression, dt),
+                        tilt = tiltSpring.next(currentGeom.tilt, targetGeom.tilt, dt),
+                        shear = shearSpring.next(currentGeom.shear, targetGeom.shear, dt)
+                    )
 
                     currentState.copy(
                         leftEye = currentState.leftEye.copy(
@@ -56,7 +74,7 @@ class AutonomousEngine(
                             geometry = newGeom
                         ),
                         rightEye = currentState.rightEye.copy(
-                            lookAtX = newLookX + (newLookX * 0.03f), // subtle asymmetry
+                            lookAtX = newLookX + (newLookX * 0.03f),
                             lookAtY = newLookY,
                             geometry = newGeom
                         )
@@ -106,6 +124,7 @@ class AutonomousEngine(
             BehaviorSystem.Intention.REFRESH_DISPLAY -> {
                 runRefreshSequence()
             }
+            else -> {}
         }
     }
 
@@ -156,38 +175,33 @@ class AutonomousEngine(
     }
 
     private suspend fun runRefreshSequence() {
+        // Fast hardware style refresh: 200ms total
         _state.update { it.copy(isRefreshing = true, refreshProgress = 0f) }
-        delay(100)
-        for (i in 0..30) {
-            _state.update { it.copy(refreshProgress = i / 30f) }
-            delay(16)
+        delay(60) // Eyes disappear
+
+        val steps = 10
+        for (i in 0..steps) {
+            _state.update { it.copy(refreshProgress = i / steps.toFloat()) }
+            delay(10) // Rapid sweep
         }
+
+        delay(40) // Pause at bottom
         _state.update { it.copy(isRefreshing = false) }
     }
 
-    /**
-     * Reacts to a user interaction (tap).
-     */
     fun onInteraction() {
         if (isReacting) return
 
         scope.launch {
             isReacting = true
-
-            // 1. Notice/Startle
             targetLookX = 0f
             targetLookY = -0.1f
             targetGeom = EyePresets.CURIOUS
-            delay(400)
-
-            // 2. Investigate/Focus
+            delay(1000)
             targetGeom = EyePresets.FOCUSED
             delay(1500)
-
-            // 3. Relax
             targetGeom = EyePresets.NEUTRAL
             delay(500)
-
             isReacting = false
         }
     }

@@ -15,155 +15,180 @@ class AutonomousEngine(
     private val _state = MutableStateFlow(LuxFaceState())
     val state: StateFlow<LuxFaceState> = _state.asStateFlow()
 
+    // Physics Solvers for different properties
+    private val lookXSpring = SpringSolver(stiffness = 120f, dampingRatio = 0.6f)
+    private val lookYSpring = SpringSolver(stiffness = 120f, dampingRatio = 0.6f)
+
+    // Geometry morphing targets
+    private var targetGeom = EyePresets.NEUTRAL
+    private var targetLookX = 0f
+    private var targetLookY = 0f
+
+    // Flag to pause the idle loop during a high-priority reaction
+    private var isReacting = false
+
     init {
         startBehaviors()
+        startPhysicsTicker()
+        startBreathingLoop()
     }
 
     private fun startBehaviors() {
-        scope.launch { startIdleLoop() }
+        scope.launch { mainLoop() }
         scope.launch { startBlinkLoop() }
-        scope.launch { startBreathingLoop() }
-        scope.launch { startFloatingLoop() }
     }
 
-    private suspend fun startIdleLoop() {
+    private fun startPhysicsTicker() {
+        scope.launch {
+            val dt = 0.016f // ~60fps
+            while (true) {
+                _state.update { currentState ->
+                    val newLookX = lookXSpring.next(currentState.leftEye.lookAtX, targetLookX, dt)
+                    val newLookY = lookYSpring.next(currentState.leftEye.lookAtY, targetLookY, dt)
+
+                    // Simple LERP for geometry in this milestone, but driven by the ticker
+                    val newGeom = currentState.leftEye.geometry.lerp(targetGeom, 0.15f)
+
+                    currentState.copy(
+                        leftEye = currentState.leftEye.copy(
+                            lookAtX = newLookX,
+                            lookAtY = newLookY,
+                            geometry = newGeom
+                        ),
+                        rightEye = currentState.rightEye.copy(
+                            lookAtX = newLookX + (newLookX * 0.03f), // subtle asymmetry
+                            lookAtY = newLookY,
+                            geometry = newGeom
+                        )
+                    )
+                }
+                delay(16)
+            }
+        }
+    }
+
+    private suspend fun mainLoop() {
         while (true) {
+            if (!isReacting) {
+                val intention = BehaviorSystem.getNextIntention(_state.value.mood)
+                executeIntention(intention)
+            }
             delay(BehaviorSystem.getNextBehaviorDelay())
-            val currentMood = _state.value.mood
+        }
+    }
 
-            // Randomly decide to scan instead
-            if (Random.nextFloat() < 0.1f) {
+    private suspend fun executeIntention(intention: BehaviorSystem.Intention) {
+        when (intention) {
+            BehaviorSystem.Intention.IDLE_OBSERVE -> {
+                targetGeom = EyePresets.NEUTRAL
+                targetLookX = Random.nextFloat() * 0.4f - 0.2f
+                targetLookY = Random.nextFloat() * 0.4f - 0.2f
+                delay(Random.nextLong(2000, 5000))
+            }
+            BehaviorSystem.Intention.INVESTIGATE -> {
+                targetLookX = Random.nextFloat() * 1.4f - 0.7f
+                targetLookY = Random.nextFloat() * 0.8f - 0.4f
+                delay(800)
+                targetGeom = EyePresets.FOCUSED
+                delay(1200)
+                targetGeom = EyePresets.CURIOUS
+                delay(2000)
+                targetGeom = EyePresets.NEUTRAL
+            }
+            BehaviorSystem.Intention.DROWSE -> {
+                targetGeom = EyePresets.SLEEPY
+                delay(Random.nextLong(4000, 7000))
+                targetGeom = EyePresets.NEUTRAL
+            }
+            BehaviorSystem.Intention.SCAN_ENVIRONMENT -> {
                 runScanSequence()
-            } else if (Random.nextFloat() < 0.05f) {
+            }
+            BehaviorSystem.Intention.REFRESH_DISPLAY -> {
                 runRefreshSequence()
-            } else {
-                val nextExpression = BehaviorSystem.getRandomExpression(currentMood)
-                morphToExpression(nextExpression)
-
-                // Random look around
-                val lookX = Random.nextFloat() * 2 - 1
-                val lookY = Random.nextFloat() * 2 - 1
-                updateLookAt(lookX, lookY)
             }
         }
     }
 
     private suspend fun startBlinkLoop() {
         while (true) {
-            delay(Random.nextLong(2000, 6000))
-            _state.update {
-                it.copy(
-                    leftEye = it.leftEye.copy(isBlinking = true),
-                    rightEye = it.rightEye.copy(isBlinking = true)
-                )
-            }
+            delay(Random.nextLong(2500, 8000))
+            _state.update { it.copy(
+                leftEye = it.leftEye.copy(isBlinking = true),
+                rightEye = it.rightEye.copy(isBlinking = true)
+            )}
 
-            // Blink animation duration (~160ms)
-            val steps = 10
-            for (i in 0..steps) {
-                val progress = if (i <= steps / 2) {
-                    (i / (steps / 2f))
-                } else {
-                    1f - ((i - steps / 2f) / (steps / 2f))
-                }
-                _state.update {
-                    it.copy(
-                        leftEye = it.leftEye.copy(blinkProgress = progress),
-                        rightEye = it.rightEye.copy(blinkProgress = progress)
-                    )
-                }
+            for (i in 0..6) {
+                val progress = if (i <= 3) i / 3f else 1f - (i - 3) / 3f
+                _state.update { it.copy(
+                    leftEye = it.leftEye.copy(blinkProgress = progress),
+                    rightEye = it.rightEye.copy(blinkProgress = progress)
+                )}
                 delay(16)
             }
 
-            _state.update {
-                it.copy(
-                    leftEye = it.leftEye.copy(isBlinking = false, blinkProgress = 0f),
-                    rightEye = it.rightEye.copy(isBlinking = false, blinkProgress = 0f)
-                )
+            _state.update { it.copy(
+                leftEye = it.leftEye.copy(isBlinking = false, blinkProgress = 0f),
+                rightEye = it.rightEye.copy(isBlinking = false, blinkProgress = 0f)
+            )}
+        }
+    }
+
+    private fun startBreathingLoop() {
+        scope.launch {
+            var time = 0f
+            while (true) {
+                time += 0.04f
+                _state.update { it.copy(verticalOffset = sin(time) * 1.5f) }
+                delay(32)
             }
-        }
-    }
-
-    private suspend fun startBreathingLoop() {
-        var time = 0f
-        while (true) {
-            time += 0.05f
-            val breathingOffset = sin(time) * 2f
-            _state.update { it.copy(verticalOffset = breathingOffset) }
-            delay(32)
-        }
-    }
-
-    private suspend fun startFloatingLoop() {
-        var time = 0f
-        while (true) {
-            time += 0.02f
-            val rotation = sin(time * 0.7f) * 2f
-            _state.update { it.copy(rotationZ = rotation) }
-            delay(32)
         }
     }
 
     private suspend fun runScanSequence() {
-        morphToExpression(LuxExpression.SCANNING)
+        targetGeom = EyePresets.FOCUSED
         _state.update { it.copy(isScanning = true) }
-        for (i in 0..100) {
-            _state.update { it.copy(scanProgress = i / 100f) }
+        for (i in 0..60) {
+            _state.update { it.copy(scanProgress = i / 60f) }
             delay(20)
         }
         _state.update { it.copy(isScanning = false) }
-        morphToExpression(LuxExpression.NEUTRAL)
+        targetGeom = EyePresets.NEUTRAL
     }
 
     private suspend fun runRefreshSequence() {
         _state.update { it.copy(isRefreshing = true, refreshProgress = 0f) }
-
-        // Quick flicker/blank
         delay(100)
-
-        // Vertical sweep reveal
-        val steps = 40
-        for (i in 0..steps) {
-            _state.update { it.copy(refreshProgress = i / steps.toFloat()) }
+        for (i in 0..30) {
+            _state.update { it.copy(refreshProgress = i / 30f) }
             delay(16)
         }
-
         _state.update { it.copy(isRefreshing = false) }
     }
 
-    private suspend fun morphToExpression(target: LuxExpression) {
-        val startLeft = _state.value.leftEye.geometry
-        val startRight = _state.value.rightEye.geometry
-        val targetGeom = target.toGeometry()
+    /**
+     * Reacts to a user interaction (tap).
+     */
+    fun onInteraction() {
+        if (isReacting) return
 
-        val duration = 300L
-        val steps = 20
-        val stepDelay = duration / steps
+        scope.launch {
+            isReacting = true
 
-        for (i in 1..steps) {
-            val fraction = i / steps.toFloat()
-            _state.update {
-                it.copy(
-                    leftEye = it.leftEye.copy(
-                        expression = target,
-                        geometry = startLeft.lerp(targetGeom, fraction)
-                    ),
-                    rightEye = it.rightEye.copy(
-                        expression = target,
-                        geometry = startRight.lerp(targetGeom, fraction)
-                    )
-                )
-            }
-            delay(stepDelay)
-        }
-    }
+            // 1. Notice/Startle
+            targetLookX = 0f
+            targetLookY = -0.1f
+            targetGeom = EyePresets.CURIOUS
+            delay(400)
 
-    fun updateLookAt(x: Float, y: Float) {
-        _state.update {
-            it.copy(
-                leftEye = it.leftEye.copy(lookAtX = x, lookAtY = y),
-                rightEye = it.rightEye.copy(lookAtX = x, lookAtY = y)
-            )
+            // 2. Investigate/Focus
+            targetGeom = EyePresets.FOCUSED
+            delay(1500)
+
+            // 3. Relax
+            targetGeom = EyePresets.NEUTRAL
+            delay(500)
+
+            isReacting = false
         }
     }
 }

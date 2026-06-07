@@ -27,7 +27,9 @@ fun LuxFaceCanvas(
             rotate(state.rotationZ, Offset(centerX, centerY))
         }) {
 
-            // Handle the Refresh effect (Scanline travels vertically and masks the face)
+            // Background Visor Parallax Layer (subtle)
+            drawVisorDepth(state, centerX, centerY)
+
             if (state.isRefreshing) {
                 drawRefreshEffect(state, centerX, centerY)
             } else {
@@ -39,6 +41,18 @@ fun LuxFaceCanvas(
             }
         }
     }
+}
+
+private fun DrawScope.drawVisorDepth(state: LuxFaceState, centerX: Float, centerY: Float) {
+    // Subtle gradient or glow that moves with look-at but with more "lag" to simulate depth
+    val avgLookX = (state.leftEye.lookAtX + state.rightEye.lookAtX) / 2f
+    val avgLookY = (state.leftEye.lookAtY + state.rightEye.lookAtY) / 2f
+
+    drawCircle(
+        color = Color(0xFF0D47A1).copy(alpha = 0.1f),
+        radius = 400f,
+        center = Offset(centerX + avgLookX * 10f, centerY + avgLookY * 5f)
+    )
 }
 
 private fun DrawScope.drawEyes(state: LuxFaceState, centerX: Float, centerY: Float) {
@@ -68,30 +82,39 @@ private fun DrawScope.drawEye(eyeState: EyeState, center: Offset, isLeft: Boolea
 
     withTransform({
         translate(center.x + lookOffsetX, center.y + lookOffsetY)
-
-        // Individual eye tilt (Curious, etc.)
-        // Left eye usually tilts inward for curiosity, right eye outward.
-        // The tilt parameter in EyeGeometry handles the specific angle.
         rotate(geometry.tilt * (if (isLeft) 1f else -1f), Offset.Zero)
 
         if (eyeState.isBlinking) {
             scale(1f, 1f - eyeState.blinkProgress, Offset.Zero)
         }
     }) {
-        val color = Color(0xFF81D4FA) // Light Blue
+        val eyeColor = Color(0xFF81D4FA) // Luminous Cerulean
 
-        // Main eye fill
+        // Inner luminous core
         drawPath(
             path = path,
-            color = color,
-            alpha = eyeState.glowIntensity
+            color = Color.White.copy(alpha = 0.2f * eyeState.glowIntensity)
         )
 
-        // Subtle glow border
+        // Main emissive color
         drawPath(
             path = path,
-            color = color.copy(alpha = 0.4f),
-            style = Stroke(width = 8f)
+            color = eyeColor,
+            alpha = 0.9f * eyeState.glowIntensity
+        )
+
+        // Bloom / Glow Border
+        drawPath(
+            path = path,
+            color = eyeColor.copy(alpha = 0.4f * eyeState.glowIntensity),
+            style = Stroke(width = 12f)
+        )
+
+        // Secondary outer glow
+        drawPath(
+            path = path,
+            color = eyeColor.copy(alpha = 0.15f * eyeState.glowIntensity),
+            style = Stroke(width = 24f)
         )
     }
 }
@@ -110,11 +133,7 @@ private fun DrawScope.drawRefreshEffect(state: LuxFaceState, centerX: Float, cen
     val progress = state.refreshProgress
     val scanY = size.height * progress
 
-    // In EVE, the refresh line usually "reveals" the eyes as it moves.
-    // Here we clip the drawing area based on the scanline position.
-
     withTransform({
-        // Only draw eyes BELOW the scanline to simulate a "refreshing reveal"
         clipRect(
             left = 0f,
             top = scanY,
@@ -126,7 +145,6 @@ private fun DrawScope.drawRefreshEffect(state: LuxFaceState, centerX: Float, cen
         drawEyes(state, centerX, centerY)
     }
 
-    // Draw the bright refresh line itself
     drawLine(
         color = Color(0xFF00E5FF),
         start = Offset(0f, scanY),

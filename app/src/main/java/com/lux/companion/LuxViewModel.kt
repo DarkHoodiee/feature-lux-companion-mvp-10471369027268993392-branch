@@ -14,6 +14,8 @@ class LuxViewModel : ViewModel() {
 
     val uiState: StateFlow<LuxFaceState> = engine.state
 
+    private val interactionHandler = InteractionHandler { expression ->
+        engine.updateExpression(expression)
     private val interactionHandler = InteractionHandler { _ ->
         engine.onInteraction()
     }

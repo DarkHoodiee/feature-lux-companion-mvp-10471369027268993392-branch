@@ -16,6 +16,8 @@ class LuxViewModel : ViewModel() {
 
     private val interactionHandler = InteractionHandler { expression ->
         engine.updateExpression(expression)
+    private val interactionHandler = InteractionHandler { _ ->
+        engine.onInteraction()
     }
 
     fun onInteraction(interaction: LuxInteraction) {

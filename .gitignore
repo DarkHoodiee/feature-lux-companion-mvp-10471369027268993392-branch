@@ -1,0 +1,13 @@
+.gradle/
+build/
+app/build/
+domain/build/
+renderer/build/
+engine/build/
+interaction/build/
+assistant/build/
+widget/build/
+*.iml
+.idea/
+local.properties
+.DS_Store

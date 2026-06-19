@@ -5,20 +5,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Shadow
-import androidx.compose.ui.graphics.drawscope.withTransform
-import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.ui.graphics.Paint
-import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.withTransform
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.ClipOp
-import com.lux.companion.domain.LuxFaceState
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.withTransform
 import com.lux.companion.domain.EyeState
+import com.lux.companion.domain.LuxFaceState
 
 @Composable
 fun LuxFaceCanvas(
@@ -33,9 +27,6 @@ fun LuxFaceCanvas(
             translate(0f, state.verticalOffset)
             rotate(state.rotationZ, Offset(centerX, centerY))
         }) {
-            if (!state.isRefreshing) {
-                drawEyes(state.eyeState, centerX, centerY)
-
             // Background Visor Parallax Layer (subtle)
             drawVisorDepth(state, centerX, centerY)
 
@@ -48,33 +39,12 @@ fun LuxFaceCanvas(
             if (state.isScanning) {
                 drawScanEffect(state.scanProgress)
             }
-
-            if (state.isRefreshing) {
-                drawRefreshEffect(state.refreshProgress)
-            }
-        }
-    }
-}
-
-private fun DrawScope.drawEyes(eyeState: EyeState, centerX: Float, centerY: Float) {
-    val eyeWidth = 120f * eyeState.scaleX
-    val eyeHeight = 150f * eyeState.scaleY
-    val eyeSpacing = 100f
-
-    val lookOffsetX = eyeState.lookAtX * 30f
-    val lookOffsetY = eyeState.lookAtY * 20f
-
-    // Left Eye
-    drawEye(
-        eyeState,
-        Offset(centerX - eyeSpacing - eyeWidth / 2f + lookOffsetX, centerY + lookOffsetY),
-        Size(eyeWidth, eyeHeight)
         }
     }
 }
 
 private fun DrawScope.drawVisorDepth(state: LuxFaceState, centerX: Float, centerY: Float) {
-    // Subtle gradient or glow that moves with look-at but with more "lag" to simulate depth
+    // Subtle glow that moves with look-at but with more "lag" to simulate depth
     val avgLookX = (state.leftEye.lookAtX + state.rightEye.lookAtX) / 2f
     val avgLookY = (state.leftEye.lookAtY + state.rightEye.lookAtY) / 2f
 
@@ -97,34 +67,6 @@ private fun DrawScope.drawEyes(state: LuxFaceState, centerX: Float, centerY: Flo
 
     // Right Eye
     drawEye(
-        eyeState,
-        Offset(centerX + eyeSpacing - eyeWidth / 2f + lookOffsetX, centerY + lookOffsetY),
-        Size(eyeWidth, eyeHeight)
-    )
-}
-
-private fun DrawScope.drawEye(eyeState: EyeState, topLeft: Offset, size: Size) {
-    val path = EyePathProvider.getEyePath(eyeState.expression, size)
-
-    withTransform({
-        translate(topLeft.x, topLeft.y)
-        if (eyeState.isBlinking) {
-            scale(1f, 1f - eyeState.blinkProgress, Offset(size.width / 2f, size.height / 2f))
-        }
-    }) {
-        // Drawing with glow
-        val color = Color(0xFF81D4FA) // Light Blue
-        drawPath(
-            path = path,
-            color = color,
-            alpha = eyeState.glowIntensity
-        )
-
-        // Add subtle glow layer
-        drawPath(
-            path = path,
-            color = color.copy(alpha = 0.3f),
-            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 10f)
         state.rightEye,
         Offset(centerX + eyeSpacing, centerY),
         isLeft = false
@@ -145,6 +87,8 @@ private fun DrawScope.drawEye(eyeState: EyeState, center: Offset, isLeft: Boolea
         if (eyeState.isBlinking) {
             scale(1f, 1f - eyeState.blinkProgress, Offset.Zero)
         }
+        // Apply individual eye scale if defined
+        scale(eyeState.scaleX, eyeState.scaleY, Offset.Zero)
     }) {
         val eyeColor = Color(0xFF81D4FA) // Luminous Cerulean
 
@@ -187,31 +131,48 @@ private fun DrawScope.drawScanEffect(progress: Float) {
     )
 }
 
-private fun DrawScope.drawRefreshEffect(progress: Float) {
-    val color = Color(0xFF00E5FF)
-    val lineY = size.height * progress
-    drawLine(
-        color = color,
-        start = Offset(0f, lineY),
-        end = Offset(size.width, lineY),
-        strokeWidth = 8f
-        strokeWidth = 6f
-    )
-}
-
 private fun DrawScope.drawRefreshEffect(state: LuxFaceState, centerX: Float, centerY: Float) {
     val progress = state.refreshProgress
     val scanY = size.height * progress
 
-    withTransform({
-        clipRect(
-            left = 0f,
-            top = scanY,
-            right = size.width,
-            bottom = size.height,
-            clipOp = ClipOp.Intersect
-        )
-    }) {
+    // Requirement: eyes disappear -> line scans -> eyes return
+    // We achieve this by only drawing the portion of the eyes that the scanline has "passed"
+    // or by keeping them hidden until the scan finishes.
+    // Given the sequence "line scans -> eyes return", we'll hide them during the scan,
+    // but the "reveal" effect (clipRect top=0 to scanY) is often what's intended for "return".
+
+    // To strictly follow "eyes disappear -> line scans -> eyes return":
+    // If we are scanning (progress > 0 and < 1), we don't draw eyes, just the line.
+    // When progress reaches 1, they "return" (handled by isRefreshing becoming false).
+
+    // However, if we want a more dynamic "eyes return" as it scans:
+    /*
+    clipRect(
+        left = 0f,
+        top = 0f,
+        right = size.width,
+        bottom = scanY,
+        clipOp = ClipOp.Intersect
+    ) {
+        drawEyes(state, centerX, centerY)
+    }
+    */
+
+    // For now, let's implement the strict "invisible during scan" version if it fits the literal words:
+    // "eyes disappear -> line scans -> eyes return"
+
+    // Actually, one of the previous snippets had:
+    // clipRect(top = scanY, bottom = size.height, clipOp = ClipOp.Intersect) { drawEyes(state, centerX, centerY) }
+    // which shows eyes BELOW the line.
+
+    // Let's do the one that makes the most sense visually: eyes are revealed from top to bottom.
+    clipRect(
+        left = 0f,
+        top = 0f,
+        right = size.width,
+        bottom = scanY,
+        clipOp = ClipOp.Intersect
+    ) {
         drawEyes(state, centerX, centerY)
     }
 

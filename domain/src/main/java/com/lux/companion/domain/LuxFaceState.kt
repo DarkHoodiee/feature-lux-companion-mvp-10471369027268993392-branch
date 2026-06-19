@@ -9,7 +9,6 @@ enum class LuxMood {
 }
 
 data class LuxFaceState(
-    val eyeState: EyeState = EyeState(),
     val leftEye: EyeState = EyeState(),
     val rightEye: EyeState = EyeState(),
     val mood: LuxMood = LuxMood.CALM,

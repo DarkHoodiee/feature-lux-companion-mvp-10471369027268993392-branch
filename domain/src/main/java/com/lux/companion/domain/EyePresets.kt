@@ -1,14 +1,16 @@
 package com.lux.companion.domain
 
 object EyePresets {
-    // A stable, slightly rounded capsule.
+    // Canonical EVE Neutral: Asymmetrical, tapered inner, fuller outer.
+    // Inner is towards the nose. Outer is towards the "ears".
     val NEUTRAL = EyeGeometry(
-        width = 120f,
-        height = 160f,
+        width = 130f,
+        height = 155f,
         upperCurve = 1.0f,
         lowerCurve = 1.0f,
-        innerCompression = 0.05f,
-        outerCompression = 0.05f
+        innerCompression = 0.15f, // Tapered inner
+        outerCompression = 0.02f, // Fuller outer
+        tilt = 5f                 // Slight natural tilt
     )
 
     // Curiosity is about openness and investigation. Taller, softer, less angular.

@@ -1,8 +1,5 @@
 package com.lux.companion.engine
 
-import com.lux.companion.domain.LuxFaceState
-import com.lux.companion.domain.LuxMood
-import com.lux.companion.domain.LuxExpression
 import com.lux.companion.domain.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -15,39 +12,12 @@ import kotlin.random.Random
 class AutonomousEngine(
     private val scope: CoroutineScope
 ) {
-    private val _state = MutableStateFlow(LuxFaceState())
+    private val _state = MutableStateFlow(LuxFaceState(startupPhase = StartupPhase.OFF))
     val state: StateFlow<LuxFaceState> = _state.asStateFlow()
 
-    init {
-        startBehaviors()
-    }
+    private val lookXSpring = SpringSolver(stiffness = 100f, dampingRatio = 0.65f)
+    private val lookYSpring = SpringSolver(stiffness = 100f, dampingRatio = 0.65f)
 
-    private fun startBehaviors() {
-        scope.launch { startIdleLoop() }
-        scope.launch { startBlinkLoop() }
-        scope.launch { startBreathingLoop() }
-        scope.launch { startFloatingLoop() }
-    }
-
-    private suspend fun startIdleLoop() {
-        while (true) {
-            delay(BehaviorSystem.getNextBehaviorDelay())
-            val nextExpression = BehaviorSystem.getRandomExpression(_state.value.mood)
-
-            // Randomly decide to scan instead
-            if (Random.nextFloat() < 0.1f) {
-                runScanSequence()
-            } else if (Random.nextFloat() < 0.05f) {
-                runRefreshSequence()
-            } else {
-                updateExpression(nextExpression)
-                updateLookAt(Random.nextFloat() * 2 - 1, Random.nextFloat() * 2 - 1)
-            }
-    // Physics Solvers for movement
-    private val lookXSpring = SpringSolver(stiffness = 120f, dampingRatio = 0.6f)
-    private val lookYSpring = SpringSolver(stiffness = 120f, dampingRatio = 0.6f)
-
-    // Physics Solvers for geometry parameters
     private val widthSpring = SpringSolver(stiffness = 180f, dampingRatio = 0.75f)
     private val heightSpring = SpringSolver(stiffness = 180f, dampingRatio = 0.75f)
     private val upperCurveSpring = SpringSolver(stiffness = 150f, dampingRatio = 0.7f)
@@ -62,21 +32,71 @@ class AutonomousEngine(
     private var targetLookY = 0f
 
     private var isReacting = false
+    private var isInitialized = false
 
     init {
-        startBehaviors()
-        startPhysicsTicker()
-        startBreathingLoop()
+        scope.launch {
+            runStartupSequence()
+            isInitialized = true
+            startBehaviors()
+            startPhysicsTicker()
+        }
+    }
+
+    private suspend fun runStartupSequence() {
+        // Phase 1: Center Dot
+        _state.update { it.copy(startupPhase = StartupPhase.CENTER_DOT, startupProgress = 0f) }
+        delay(200)
+
+        // Phase 2: Expand Line
+        _state.update { it.copy(startupPhase = StartupPhase.EXPAND_LINE) }
+        for (i in 0..10) {
+            _state.update { it.copy(startupProgress = i / 10f) }
+            delay(20)
+        }
+
+        // Phase 3: Sweep Up Disappear (Center to Top)
+        _state.update { it.copy(startupPhase = StartupPhase.SWEEP_UP_DISAPPEAR) }
+        for (i in 0..15) {
+            _state.update { it.copy(startupProgress = i / 15f) }
+            delay(15)
+        }
+
+        // Phase 4: Bottom Line Appear & Sweep Up (Bottom to Center)
+        _state.update { it.copy(startupPhase = StartupPhase.BOTTOM_LINE_APPEAR) }
+        for (i in 0..20) {
+            _state.update { it.copy(startupProgress = i / 20f) }
+            delay(15)
+        }
+
+        // Phase 5: Sweep reaches center -> Eyes materialize & Glow ramps in
+        _state.update { it.copy(startupPhase = StartupPhase.SWEEP_UP_REVEAL) }
+        for (i in 0..25) {
+            val progress = i / 25f
+            _state.update {
+                it.copy(
+                    startupProgress = progress,
+                    leftEye = it.leftEye.copy(glowIntensity = progress),
+                    rightEye = it.rightEye.copy(glowIntensity = progress)
+                )
+            }
+            delay(15)
+        }
+
+        // Phase 6: Complete
+        _state.update { it.copy(startupPhase = StartupPhase.COMPLETE) }
     }
 
     private fun startBehaviors() {
         scope.launch { mainLoop() }
         scope.launch { startBlinkLoop() }
+        scope.launch { startBreathingLoop() }
+        scope.launch { startFloatingLoop() }
     }
 
     private fun startPhysicsTicker() {
         scope.launch {
-            val dt = 0.016f // ~60fps
+            val dt = 0.016f
             while (true) {
                 _state.update { currentState ->
                     val newLookX = lookXSpring.next(currentState.leftEye.lookAtX, targetLookX, dt)
@@ -116,69 +136,89 @@ class AutonomousEngine(
     private suspend fun mainLoop() {
         while (true) {
             if (!isReacting) {
-                val intention = BehaviorSystem.getNextIntention(_state.value.mood)
-                executeIntention(intention)
+                val action = IdleBrain.selectNextAction(_state.value.mood)
+                executeAction(action)
+                delay(IdleBrain.getActionDuration(action))
+            } else {
+                delay(100)
             }
-            delay(BehaviorSystem.getNextBehaviorDelay())
         }
     }
 
-    private suspend fun executeIntention(intention: BehaviorSystem.Intention) {
-        when (intention) {
-            BehaviorSystem.Intention.IDLE_OBSERVE -> {
+    private suspend fun executeAction(action: IdleBrain.Action) {
+        when (action) {
+            IdleBrain.Action.NEUTRAL_OBSERVATION -> {
                 targetGeom = EyePresets.NEUTRAL
+                targetLookX = Random.nextFloat() * 0.2f - 0.1f
+                targetLookY = Random.nextFloat() * 0.2f - 0.1f
+            }
+            IdleBrain.Action.LOOK_LEFT -> {
+                targetLookX = -0.6f
+                targetLookY = Random.nextFloat() * 0.3f - 0.15f
+                delay(400)
+                targetLookX -= 0.1f
+            }
+            IdleBrain.Action.LOOK_RIGHT -> {
+                targetLookX = 0.6f
+                targetLookY = Random.nextFloat() * 0.3f - 0.15f
+                delay(400)
+                targetLookX += 0.1f
+            }
+            IdleBrain.Action.LOOK_UP -> {
+                targetLookY = -0.5f
                 targetLookX = Random.nextFloat() * 0.4f - 0.2f
-                targetLookY = Random.nextFloat() * 0.4f - 0.2f
-                delay(Random.nextLong(2000, 5000))
             }
-            BehaviorSystem.Intention.INVESTIGATE -> {
-                targetLookX = Random.nextFloat() * 1.4f - 0.7f
-                targetLookY = Random.nextFloat() * 0.8f - 0.4f
-                delay(800)
-                targetGeom = EyePresets.FOCUSED
-                delay(1200)
+            IdleBrain.Action.CURIOSITY_TILT -> {
                 targetGeom = EyePresets.CURIOUS
-                delay(2000)
-                targetGeom = EyePresets.NEUTRAL
+                targetLookX = Random.nextFloat() * 0.4f - 0.2f
+                targetLookY = -0.2f
             }
-            BehaviorSystem.Intention.DROWSE -> {
-                targetGeom = EyePresets.SLEEPY
-                delay(Random.nextLong(4000, 7000))
-                targetGeom = EyePresets.NEUTRAL
+            IdleBrain.Action.FIXATION -> {
+                targetGeom = EyePresets.FOCUSED
+                targetLookX = 0f
+                targetLookY = 0f
             }
-            BehaviorSystem.Intention.SCAN_ENVIRONMENT -> {
-                runScanSequence()
-            }
-            BehaviorSystem.Intention.REFRESH_DISPLAY -> {
+            IdleBrain.Action.SCREEN_REFRESH -> {
                 runRefreshSequence()
             }
-            else -> {}
+            IdleBrain.Action.MICRO_ADJUSTMENT -> {
+                targetLookX += (Random.nextFloat() * 0.1f - 0.05f)
+                targetLookY += (Random.nextFloat() * 0.1f - 0.05f)
+            }
         }
     }
 
     private suspend fun startBlinkLoop() {
         while (true) {
-            delay(Random.nextLong(2000, 6000))
-            _state.update { it.copy(eyeState = it.eyeState.copy(isBlinking = true)) }
+            delay(Random.nextLong(4000, 10000))
+            if (_state.value.isRefreshing || _state.value.startupPhase != StartupPhase.COMPLETE) continue
 
-            // Blink animation duration
-            for (i in 0..10) {
-                val progress = if (i <= 5) i / 5f else 1f - (i - 5) / 5f
-                _state.update { it.copy(eyeState = it.eyeState.copy(blinkProgress = progress)) }
+            val steps = 6
+            for (i in 0..steps) {
+                val progress = if (i <= steps / 2) i / (steps / 2f) else 1f - (i - steps / 2) / (steps / 2f)
+                _state.update {
+                    it.copy(
+                        leftEye = it.leftEye.copy(isBlinking = true, blinkProgress = progress),
+                        rightEye = it.rightEye.copy(isBlinking = true, blinkProgress = progress)
+                    )
+                }
                 delay(16)
             }
 
-            _state.update { it.copy(eyeState = it.eyeState.copy(isBlinking = false, blinkProgress = 0f)) }
+            _state.update {
+                it.copy(
+                    leftEye = it.leftEye.copy(isBlinking = false, blinkProgress = 0f),
+                    rightEye = it.rightEye.copy(isBlinking = false, blinkProgress = 0f)
+                )
+            }
         }
     }
 
     private suspend fun startBreathingLoop() {
         var time = 0f
         while (true) {
-            time += 0.05f
-            // Simplified breathing vertical motion
-            val breathingOffset = sin(time) * 2f
-            _state.update { it.copy(verticalOffset = breathingOffset) }
+            time += 0.04f
+            _state.update { it.copy(verticalOffset = sin(time) * 1.2f) }
             delay(32)
         }
     }
@@ -186,107 +226,38 @@ class AutonomousEngine(
     private suspend fun startFloatingLoop() {
         var time = 0f
         while (true) {
-            time += 0.02f
-            val rotation = sin(time * 0.7f) * 2f
+            time += 0.015f
+            val rotation = sin(time * 0.6f) * 1.5f
             _state.update { it.copy(rotationZ = rotation) }
             delay(32)
-            delay(Random.nextLong(2500, 8000))
-            _state.update { it.copy(
-                leftEye = it.leftEye.copy(isBlinking = true),
-                rightEye = it.rightEye.copy(isBlinking = true)
-            )}
-
-            for (i in 0..6) {
-                val progress = if (i <= 3) i / 3f else 1f - (i - 3) / 3f
-                _state.update { it.copy(
-                    leftEye = it.leftEye.copy(blinkProgress = progress),
-                    rightEye = it.rightEye.copy(blinkProgress = progress)
-                )}
-                delay(16)
-            }
-
-            _state.update { it.copy(
-                leftEye = it.leftEye.copy(isBlinking = false, blinkProgress = 0f),
-                rightEye = it.rightEye.copy(isBlinking = false, blinkProgress = 0f)
-            )}
         }
-    }
-
-    private fun startBreathingLoop() {
-        scope.launch {
-            var time = 0f
-            while (true) {
-                time += 0.04f
-                _state.update { it.copy(verticalOffset = sin(time) * 1.5f) }
-                delay(32)
-            }
-        }
-    }
-
-    private suspend fun runScanSequence() {
-        _state.update { it.copy(isScanning = true, eyeState = it.eyeState.copy(expression = LuxExpression.SCANNING)) }
-        for (i in 0..100) {
-            _state.update { it.copy(scanProgress = i / 100f) }
-            delay(20)
-        }
-        _state.update { it.copy(isScanning = false, eyeState = it.eyeState.copy(expression = LuxExpression.NEUTRAL)) }
     }
 
     private suspend fun runRefreshSequence() {
-        _state.update { it.copy(isRefreshing = true, refreshProgress = 0.8f) }
-        delay(200)
-        _state.update { it.copy(refreshProgress = 0.1f) }
-        delay(100)
-        for (i in 10..100 step 5) {
-            _state.update { it.copy(refreshProgress = i / 100f) }
-            delay(16)
-        }
-        _state.update { it.copy(isRefreshing = false) }
-    }
-
-    fun updateExpression(expression: LuxExpression) {
-        _state.update { it.copy(eyeState = it.eyeState.copy(expression = expression)) }
-    }
-
-    fun updateLookAt(x: Float, y: Float) {
-        _state.update { it.copy(eyeState = it.eyeState.copy(lookAtX = x, lookAtY = y)) }
-        targetGeom = EyePresets.FOCUSED
-        _state.update { it.copy(isScanning = true) }
-        for (i in 0..60) {
-            _state.update { it.copy(scanProgress = i / 60f) }
-            delay(20)
-        }
-        _state.update { it.copy(isScanning = false) }
-        targetGeom = EyePresets.NEUTRAL
-    }
-
-    private suspend fun runRefreshSequence() {
-        // Fast hardware style refresh: 200ms total
         _state.update { it.copy(isRefreshing = true, refreshProgress = 0f) }
-        delay(60) // Eyes disappear
-
-        val steps = 10
+        delay(120)
+        val steps = 12
         for (i in 0..steps) {
             _state.update { it.copy(refreshProgress = i / steps.toFloat()) }
-            delay(10) // Rapid sweep
+            delay(12)
         }
-
-        delay(40) // Pause at bottom
+        delay(60)
         _state.update { it.copy(isRefreshing = false) }
     }
 
     fun onInteraction() {
-        if (isReacting) return
+        if (isReacting || !isInitialized) return
 
         scope.launch {
             isReacting = true
+            val prevGeom = targetGeom
             targetLookX = 0f
             targetLookY = -0.1f
             targetGeom = EyePresets.CURIOUS
-            delay(1000)
+            delay(1200)
             targetGeom = EyePresets.FOCUSED
             delay(1500)
-            targetGeom = EyePresets.NEUTRAL
+            targetGeom = prevGeom
             delay(500)
             isReacting = false
         }

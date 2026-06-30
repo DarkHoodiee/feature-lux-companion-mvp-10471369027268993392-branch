@@ -1,62 +1,77 @@
 package com.lux.companion.domain
 
-object EyePresets {
-    // A stable, slightly rounded capsule.
-    val NEUTRAL = EyeGeometry(
-        width = 120f,
-        height = 160f,
-        upperCurve = 1.0f,
-        lowerCurve = 1.0f,
-        innerCompression = 0.05f,
-        outerCompression = 0.05f
+/**
+ * Named [EyeTopology] presets for each expression.
+ */
+object EyeTopologyPresets {
+
+    val Neutral = EyeTopology(
+        widthScale           = 1.00f,
+        heightScale          = 1.00f,
+        upperCurve           = 0.01f,
+        lowerCurve           = 0.00f,
+        innerCompression     = 0.56f,
+        outerExpansion       = 0.46f,
+        cornerPinch          = 0.02f,
+        taper                = 0.12f,
+        softness             = 1.00f,
+        upperLidInset        = 0.00f,
+        lowerLidInset        = 0.00f
     )
 
-    // Curiosity is about openness and investigation. Taller, softer, less angular.
-    val CURIOUS = EyeGeometry(
-        width = 135f,
-        height = 180f,
-        upperCurve = 1.1f,
-        lowerCurve = 0.9f,
-        innerCompression = 0.0f,
-        outerCompression = 0.0f,
-        tilt = -8f
+    val Curious = EyeTopology(
+        widthScale           = 1.02f,
+        heightScale          = 1.08f,
+        upperCurve           = -0.02f,
+        lowerCurve           = 0.00f,
+        innerCompression     = 0.34f,
+        outerExpansion       = 0.56f,
+        cornerPinch          = -0.02f,
+        taper                = 0.08f,
+        softness             = 1.00f,
+        upperLidInset        = 0.00f,
+        lowerLidInset        = 0.00f
     )
 
-    // Focus is a deformation of the capsule, flattened and squinting.
-    val FOCUSED = EyeGeometry(
-        width = 150f,
-        height = 70f,
-        upperCurve = 0.4f,
-        lowerCurve = 0.4f,
-        innerCompression = 0.3f,
-        outerCompression = 0.3f
+    val Focused = EyeTopology(
+        widthScale           = 1.05f,
+        heightScale          = 0.62f,
+        upperCurve           = 0.04f,
+        lowerCurve           = 0.02f,
+        innerCompression     = 0.68f,
+        outerExpansion       = 0.10f,
+        cornerPinch          = 0.10f,
+        taper                = 0.22f,
+        softness             = 1.00f,
+        upperLidInset        = 0.03f,
+        lowerLidInset        = 0.03f
     )
 
-    // Happy is the bottom edge lifting up while the top stays soft.
-    val HAPPY = EyeGeometry(
-        width = 130f,
-        height = 110f,
-        upperCurve = 1.2f,
-        lowerCurve = 0.1f, // The "lift"
-        innerCompression = 0.1f,
-        outerCompression = 0.1f
+    val Sleepy = EyeTopology(
+        widthScale           = 1.02f,
+        heightScale          = 0.50f,
+        upperCurve           = 0.02f,
+        lowerCurve           = 0.00f,
+        innerCompression     = 0.50f,
+        outerExpansion       = 0.22f,
+        cornerPinch          = 0.04f,
+        taper                = 0.14f,
+        softness             = 1.00f,
+        upperLidInset        = 0.14f,
+        lowerLidInset        = 0.00f
     )
 
-    val SLEEPY = EyeGeometry(
-        width = 115f,
-        height = 50f,
-        upperCurve = 0.1f,
-        lowerCurve = 0.6f,
-        innerCompression = 0.2f,
-        outerCompression = 0.2f
+    val Happy = Curious.copy(
+        upperCurve = 0.2f,
+        lowerLidInset = 0.2f
     )
-}
 
-fun LuxExpression.toGeometry(): EyeGeometry = when (this) {
-    LuxExpression.NEUTRAL -> EyePresets.NEUTRAL
-    LuxExpression.CURIOUS -> EyePresets.CURIOUS
-    LuxExpression.FOCUSED -> EyePresets.FOCUSED
-    LuxExpression.HAPPY -> EyePresets.HAPPY
-    LuxExpression.SLEEPY -> EyePresets.SLEEPY
-    else -> EyePresets.NEUTRAL
+    fun forExpression(expression: LuxExpression): EyeTopology = when (expression) {
+        LuxExpression.NEUTRAL -> Neutral
+        LuxExpression.CURIOUS -> Curious
+        LuxExpression.FOCUSED -> Focused
+        LuxExpression.HAPPY   -> Happy
+        LuxExpression.SLEEPY  -> Sleepy
+        else -> Neutral
+    }
 }

@@ -5,20 +5,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Shadow
-import androidx.compose.ui.graphics.drawscope.withTransform
-import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.ui.graphics.Paint
-import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.ClipOp
 import com.lux.companion.domain.LuxFaceState
 import com.lux.companion.domain.EyeState
+import com.lux.companion.domain.StartupPhase
 
 @Composable
 fun LuxFaceCanvas(
@@ -33,98 +27,105 @@ fun LuxFaceCanvas(
             translate(0f, state.verticalOffset)
             rotate(state.rotationZ, Offset(centerX, centerY))
         }) {
-            if (!state.isRefreshing) {
-                drawEyes(state.eyeState, centerX, centerY)
-
-            // Background Visor Parallax Layer (subtle)
             drawVisorDepth(state, centerX, centerY)
 
-            if (state.isRefreshing) {
-                drawRefreshEffect(state, centerX, centerY)
-            } else {
-                drawEyes(state, centerX, centerY)
+            if (state.startupPhase != StartupPhase.ONLINE && state.startupPhase != StartupPhase.OFF) {
+                drawStartupPhase(state, centerX, centerY)
+            } else if (state.startupPhase == StartupPhase.ONLINE) {
+                if (state.isRefreshing) {
+                    drawRefreshEffect(state, centerX, centerY)
+                } else {
+                    drawEyes(state, centerX, centerY)
+                }
+
+                if (state.isScanning) {
+                    drawScanEffect(state.scanProgress)
+                }
+
+                // Overlay subtle raster lines
+                drawVisorRasterLines()
             }
-
-            if (state.isScanning) {
-                drawScanEffect(state.scanProgress)
-            }
-
-            if (state.isRefreshing) {
-                drawRefreshEffect(state.refreshProgress)
-            }
-        }
-    }
-}
-
-private fun DrawScope.drawEyes(eyeState: EyeState, centerX: Float, centerY: Float) {
-    val eyeWidth = 120f * eyeState.scaleX
-    val eyeHeight = 150f * eyeState.scaleY
-    val eyeSpacing = 100f
-
-    val lookOffsetX = eyeState.lookAtX * 30f
-    val lookOffsetY = eyeState.lookAtY * 20f
-
-    // Left Eye
-    drawEye(
-        eyeState,
-        Offset(centerX - eyeSpacing - eyeWidth / 2f + lookOffsetX, centerY + lookOffsetY),
-        Size(eyeWidth, eyeHeight)
         }
     }
 }
 
 private fun DrawScope.drawVisorDepth(state: LuxFaceState, centerX: Float, centerY: Float) {
-    // Subtle gradient or glow that moves with look-at but with more "lag" to simulate depth
     val avgLookX = (state.leftEye.lookAtX + state.rightEye.lookAtX) / 2f
     val avgLookY = (state.leftEye.lookAtY + state.rightEye.lookAtY) / 2f
 
     drawCircle(
-        color = Color(0xFF0D47A1).copy(alpha = 0.1f),
-        radius = 400f,
-        center = Offset(centerX + avgLookX * 10f, centerY + avgLookY * 5f)
+        color = Color(0xFF0D47A1).copy(alpha = 0.08f),
+        radius = 450f,
+        center = Offset(centerX + avgLookX * 12f, centerY + avgLookY * 6f)
     )
+}
+
+private fun DrawScope.drawVisorRasterLines() {
+    val spacing = 8f
+    val count = (size.height / spacing).toInt()
+    for (i in 0..count) {
+        val y = i * spacing
+        drawLine(
+            color = Color.Black.copy(alpha = 0.05f),
+            start = Offset(0f, y),
+            end = Offset(size.width, y),
+            strokeWidth = 1f
+        )
+    }
+}
+
+private fun DrawScope.drawStartupPhase(state: LuxFaceState, centerX: Float, centerY: Float) {
+    val p = state.startupProgress
+    val color = Color(0xFF00E5FF)
+
+    when (state.startupPhase) {
+        StartupPhase.BOOT_DOT -> {
+            drawCircle(color = color, radius = 4f, center = Offset(centerX, centerY))
+        }
+        StartupPhase.EXPANSION_LINE -> {
+            val width = 400f * p
+            drawLine(
+                color = color,
+                start = Offset(centerX - width / 2f, centerY),
+                end = Offset(centerX + width / 2f, centerY),
+                strokeWidth = 2f
+            )
+        }
+        StartupPhase.UPPER_SWEEP -> {
+            val y = centerY - (centerY * p)
+            drawLine(
+                color = color.copy(alpha = 1f - p),
+                start = Offset(centerX - 200f, y),
+                end = Offset(centerX + 200f, y),
+                strokeWidth = 2f
+            )
+        }
+        StartupPhase.LOWER_SWEEP -> {
+            val y = size.height - (size.height / 2f * p)
+            drawLine(
+                color = color,
+                start = Offset(centerX - 200f, y),
+                end = Offset(centerX + 200f, y),
+                strokeWidth = 2f
+            )
+        }
+        StartupPhase.EYE_MATERIALIZING -> {
+            drawEyes(state, centerX, centerY)
+        }
+        else -> {}
+    }
 }
 
 private fun DrawScope.drawEyes(state: LuxFaceState, centerX: Float, centerY: Float) {
     val eyeSpacing = 120f
 
-    // Left Eye
     drawEye(
         state.leftEye,
         Offset(centerX - eyeSpacing, centerY),
         isLeft = true
     )
 
-    // Right Eye
     drawEye(
-        eyeState,
-        Offset(centerX + eyeSpacing - eyeWidth / 2f + lookOffsetX, centerY + lookOffsetY),
-        Size(eyeWidth, eyeHeight)
-    )
-}
-
-private fun DrawScope.drawEye(eyeState: EyeState, topLeft: Offset, size: Size) {
-    val path = EyePathProvider.getEyePath(eyeState.expression, size)
-
-    withTransform({
-        translate(topLeft.x, topLeft.y)
-        if (eyeState.isBlinking) {
-            scale(1f, 1f - eyeState.blinkProgress, Offset(size.width / 2f, size.height / 2f))
-        }
-    }) {
-        // Drawing with glow
-        val color = Color(0xFF81D4FA) // Light Blue
-        drawPath(
-            path = path,
-            color = color,
-            alpha = eyeState.glowIntensity
-        )
-
-        // Add subtle glow layer
-        drawPath(
-            path = path,
-            color = color.copy(alpha = 0.3f),
-            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 10f)
         state.rightEye,
         Offset(centerX + eyeSpacing, centerY),
         isLeft = false
@@ -132,43 +133,49 @@ private fun DrawScope.drawEye(eyeState: EyeState, topLeft: Offset, size: Size) {
 }
 
 private fun DrawScope.drawEye(eyeState: EyeState, center: Offset, isLeft: Boolean) {
-    val geometry = eyeState.geometry
-    val path = EyePathBuilder.buildEyePath(geometry)
+    val topology = eyeState.topology
+    val baseWidth = 100f * topology.widthScale
+    val baseHeight = 100f * topology.heightScale
+
+    val path = EyePathBuilder.buildEyePath(
+        topology = topology,
+        width = baseWidth,
+        height = baseHeight,
+        side = if (isLeft) EyeSide.Left else EyeSide.Right
+    )
 
     val lookOffsetX = eyeState.lookAtX * 40f
     val lookOffsetY = eyeState.lookAtY * 30f
 
     withTransform({
         translate(center.x + lookOffsetX, center.y + lookOffsetY)
-        rotate(geometry.tilt * (if (isLeft) 1f else -1f), Offset.Zero)
 
         if (eyeState.isBlinking) {
             scale(1f, 1f - eyeState.blinkProgress, Offset.Zero)
         }
     }) {
-        val eyeColor = Color(0xFF81D4FA) // Luminous Cerulean
+        val eyeColor = Color(0xFF00A8E8) // Canonical Lux Cerulean
 
-        // Inner luminous core
+        // Core
         drawPath(
             path = path,
             color = Color.White.copy(alpha = 0.2f * eyeState.glowIntensity)
         )
 
-        // Main emissive color
+        // Emissive
         drawPath(
             path = path,
             color = eyeColor,
             alpha = 0.9f * eyeState.glowIntensity
         )
 
-        // Bloom / Glow Border
+        // Bloom
         drawPath(
             path = path,
             color = eyeColor.copy(alpha = 0.4f * eyeState.glowIntensity),
             style = Stroke(width = 12f)
         )
 
-        // Secondary outer glow
         drawPath(
             path = path,
             color = eyeColor.copy(alpha = 0.15f * eyeState.glowIntensity),
@@ -184,18 +191,6 @@ private fun DrawScope.drawScanEffect(progress: Float) {
         start = Offset(0f, y),
         end = Offset(size.width, y),
         strokeWidth = 4f
-    )
-}
-
-private fun DrawScope.drawRefreshEffect(progress: Float) {
-    val color = Color(0xFF00E5FF)
-    val lineY = size.height * progress
-    drawLine(
-        color = color,
-        start = Offset(0f, lineY),
-        end = Offset(size.width, lineY),
-        strokeWidth = 8f
-        strokeWidth = 6f
     )
 }
 

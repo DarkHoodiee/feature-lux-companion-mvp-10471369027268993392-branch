@@ -9,7 +9,7 @@ enum class LuxMood {
 }
 
 data class LuxFaceState(
-    val eyeState: EyeState = EyeState(),
+    val eyeState: EyeState = EyeState(), // Legacy/Common
     val leftEye: EyeState = EyeState(),
     val rightEye: EyeState = EyeState(),
     val mood: LuxMood = LuxMood.CALM,
@@ -17,6 +17,8 @@ data class LuxFaceState(
     val scanProgress: Float = 0f,
     val isRefreshing: Boolean = false,
     val refreshProgress: Float = 0f,
-    val verticalOffset: Float = 0f, // For breathing/floating
-    val rotationZ: Float = 0f       // For floating/tilting
+    val verticalOffset: Float = 0f,
+    val rotationZ: Float = 0f,
+    val startupPhase: StartupPhase = StartupPhase.OFF,
+    val startupProgress: Float = 0f
 )

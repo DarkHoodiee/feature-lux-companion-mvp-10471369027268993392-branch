@@ -8,6 +8,13 @@ import org.junit.Assert.*
 class BehaviorSystemTest {
 
     @Test
+    fun testGetNextIntention() {
+        val intention = BehaviorSystem.getNextIntention(LuxMood.CALM)
+        assertNotNull(intention)
+        assertTrue(intention is BehaviorSystem.Intention)
+    }
+
+    @Test
     fun testGetRandomExpression() {
         val expression = BehaviorSystem.getRandomExpression(LuxMood.CALM)
         assertNotNull(expression)
@@ -17,6 +24,6 @@ class BehaviorSystemTest {
     @Test
     fun testGetNextBehaviorDelay() {
         val delay = BehaviorSystem.getNextBehaviorDelay()
-        assertTrue(delay in 3000..8000)
+        assertTrue(delay >= 3000 && delay <= 8000)
     }
 }

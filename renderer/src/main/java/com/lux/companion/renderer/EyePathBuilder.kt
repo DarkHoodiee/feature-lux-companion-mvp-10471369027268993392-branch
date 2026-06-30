@@ -1,71 +1,131 @@
 package com.lux.companion.renderer
 
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
-import com.lux.companion.domain.EyeGeometry
+import com.lux.companion.domain.EyeTopology
+
+enum class EyeSide {
+    Left,
+    Right
+}
 
 /**
- * Constructs a Compose Path from EyeGeometry.
- * Uses a consistent topology of 4 cubic Bezier segments to ensure smooth morphing.
- * Refined for organic, non-angular contours.
+ * Constructs a Compose Path from EyeTopology.
+ * Uses a consistent topology of 12 points and cubic Bezier segments to ensure smooth morphing.
  */
 object EyePathBuilder {
 
-    fun buildEyePath(geometry: EyeGeometry): Path {
-        val path = Path()
-        val w = geometry.width
-        val h = geometry.height
+    fun buildEyePath(
+        topology: EyeTopology,
+        width: Float = 100f,
+        height: Float = 100f,
+        side: EyeSide = EyeSide.Left
+    ): Path {
 
-        val halfW = w / 2f
-        val halfH = h / 2f
+        val points = CanonicalEyePoints.map { point ->
+            deformCanonicalPoint(
+                point = point,
+                topology = topology,
+                side = side
+            )
+        }
 
-        // Control point offsets for curvature (approx 0.552 for a circle)
-        // We use the curvature parameters to drive the handle lengths
-        val kUpper = 0.552f * geometry.upperCurve
-        val kLower = 0.552f * geometry.lowerCurve
+        val tension = 0.16f + topology.softness.coerceIn(0f, 1f) * 0.025f
 
-        // Vertical positions
-        val topY = -halfH
-        val bottomY = halfH
+        return Path().apply {
+            val count = points.size
+            val first = points.first()
 
-        // Horizontal positions
-        val leftX = -halfW
-        val rightX = halfW
+            moveTo(
+                x = first.x * width,
+                y = first.y * height
+            )
 
-        // Apply Shear (skew)
-        val topXOffset = geometry.shear * halfH
-        val bottomXOffset = -geometry.shear * halfH
+            for (index in points.indices) {
+                val previous = points[(index - 1 + count) % count]
+                val current = points[index]
+                val next = points[(index + 1) % count]
+                val afterNext = points[(index + 2) % count]
 
-        path.moveTo(topXOffset, topY)
-
-        // Top-Right Quadrant
-        path.cubicTo(
-            x1 = topXOffset + halfW * kUpper * (1f - geometry.outerCompression * 0.5f), y1 = topY,
-            x2 = rightX, y2 = -halfH * kUpper * (1f - geometry.outerCompression * 0.2f),
-            x3 = rightX, y3 = 0f
-        )
-
-        // Bottom-Right Quadrant
-        path.cubicTo(
-            x1 = rightX, y1 = halfH * kLower * (1f - geometry.outerCompression * 0.2f),
-            x2 = bottomXOffset + halfW * kLower * (1f - geometry.outerCompression * 0.5f), y2 = bottomY,
-            x3 = bottomXOffset, y3 = bottomY
-        )
-
-        // Bottom-Left Quadrant
-        path.cubicTo(
-            x1 = bottomXOffset - halfW * kLower * (1f - geometry.innerCompression * 0.5f), y1 = bottomY,
-            x2 = leftX, y2 = halfH * kLower * (1f - geometry.innerCompression * 0.2f),
-            x3 = leftX, y3 = 0f
-        )
-
-        // Top-Left Quadrant
-        path.cubicTo(
-            x1 = leftX, y1 = -halfH * kUpper * (1f - geometry.innerCompression * 0.2f),
-            x2 = topXOffset - halfW * kUpper * (1f - geometry.innerCompression * 0.5f), y2 = topY,
-            x3 = topXOffset, y3 = topY
-        )
-
-        path.close()
-        return path
+                cubicTo(
+                    x1 = (current.x + (next.x - previous.x) * tension) * width,
+                    y1 = (current.y + (next.y - previous.y) * tension) * height,
+                    x2 = (next.x - (afterNext.x - current.x) * tension) * width,
+                    y2 = (next.y - (afterNext.y - current.y) * tension) * height,
+                    x3 = next.x * width,
+                    y3 = next.y * height
+                )
+            }
+            close()
+        }
     }
+
+    private fun deformCanonicalPoint(
+        point: Offset,
+        topology: EyeTopology,
+        side: EyeSide
+    ): Offset {
+        val center = 0.5f
+
+        val upperClose = (topology.upperLidInset + topology.upperCurve * 0.16f)
+            .coerceIn(-0.18f, 0.48f)
+
+        val lowerClose = (topology.lowerLidInset + topology.lowerCurve * 0.16f)
+            .coerceIn(-0.18f, 0.48f)
+
+        val upperScale = (1f - upperClose).coerceIn(0.42f, 1.18f)
+        val lowerScale = (1f - lowerClose).coerceIn(0.42f, 1.18f)
+
+        val sideWeight = kotlin.math.abs(point.x - center) * 2f
+        val tipWeight = sideWeight.coerceIn(0f, 1f)
+        val tipWeightSquared = tipWeight * tipWeight
+
+        val tipSoftClose = (topology.cornerPinch * 0.10f + topology.taper * 0.08f)
+            .coerceIn(-0.10f, 0.18f) * tipWeightSquared
+
+        var y = if (point.y < center) {
+            center - (center - point.y) * upperScale
+        } else {
+            center + (point.y - center) * lowerScale
+        }
+
+        y = center + (y - center) * (1f - tipSoftClose)
+
+        var x = point.x
+
+        val innerSide = when (side) {
+            EyeSide.Left -> point.x > center
+            EyeSide.Right -> point.x < center
+        }
+
+        val innerCompression = topology.innerCompression.coerceIn(0f, 1f)
+        val outerExpansion = topology.outerExpansion.coerceIn(0f, 1f)
+
+        if (innerSide) {
+            x += (center - x) * innerCompression * 0.42f * tipWeightSquared
+        } else {
+            x += (x - center) * outerExpansion * 0.35f * tipWeightSquared
+        }
+
+        return Offset(
+            x = x.coerceIn(0.006f, 0.994f),
+            y = y.coerceIn(0.055f, 0.945f)
+        )
+    }
+
+    // Canonical eye silhouette (12 points)
+    private val CanonicalEyePoints = listOf(
+        Offset(0.964f, 0.500f), // 0 deg (Far Right)
+        Offset(0.902f, 0.605f), // 30 deg
+        Offset(0.732f, 0.682f), // 60 deg
+        Offset(0.500f, 0.710f), // 90 deg (Bottom Apex)
+        Offset(0.268f, 0.682f), // 120 deg
+        Offset(0.098f, 0.605f), // 150 deg
+        Offset(0.036f, 0.500f), // 180 deg (Far Left)
+        Offset(0.098f, 0.395f), // 210 deg
+        Offset(0.268f, 0.318f), // 240 deg
+        Offset(0.500f, 0.290f), // 270 deg (Top Apex)
+        Offset(0.732f, 0.318f), // 300 deg
+        Offset(0.902f, 0.395f)  // 330 deg
+    )
 }

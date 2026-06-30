@@ -12,6 +12,7 @@ enum class EyeSide {
 /**
  * Constructs a Compose Path from EyeTopology.
  * Uses a consistent topology of 12 points and cubic Bezier segments to ensure smooth morphing.
+ * Coordinates are normalized around (0,0) so the path can be translated easily.
  */
 object EyePathBuilder {
 
@@ -36,9 +37,10 @@ object EyePathBuilder {
             val count = points.size
             val first = points.first()
 
+            // Translate to center (0.5, 0.5) -> (0, 0)
             moveTo(
-                x = first.x * width,
-                y = first.y * height
+                x = (first.x - 0.5f) * width,
+                y = (first.y - 0.5f) * height
             )
 
             for (index in points.indices) {
@@ -48,12 +50,12 @@ object EyePathBuilder {
                 val afterNext = points[(index + 2) % count]
 
                 cubicTo(
-                    x1 = (current.x + (next.x - previous.x) * tension) * width,
-                    y1 = (current.y + (next.y - previous.y) * tension) * height,
-                    x2 = (next.x - (afterNext.x - current.x) * tension) * width,
-                    y2 = (next.y - (afterNext.y - current.y) * tension) * height,
-                    x3 = next.x * width,
-                    y3 = next.y * height
+                    x1 = (current.x - 0.5f + (next.x - previous.x) * tension) * width,
+                    y1 = (current.y - 0.5f + (next.y - previous.y) * tension) * height,
+                    x2 = (next.x - 0.5f - (afterNext.x - current.x) * tension) * width,
+                    y2 = (next.y - 0.5f - (afterNext.y - current.y) * tension) * height,
+                    x3 = (next.x - 0.5f) * width,
+                    y3 = (next.y - 0.5f) * height
                 )
             }
             close()

@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "com.lux.companion.domain"
+    namespace = "com.lux.hoodie.domain"
     compileSdk = 34
 
     defaultConfig {
@@ -13,14 +13,24 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_21
-        targetCompatibility = JavaVersion.VERSION_21
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions {
-        jvmTarget = "21"
+        jvmTarget = "17"
+    }
+    buildFeatures {
+        compose = true
+    }
+    composeOptions {
+        kotlinCompilerExtensionVersion = "1.5.10"
     }
 }
 
 dependencies {
     implementation(libs.androidx.core.ktx)
+    implementation(platform(libs.androidx.compose.bom))
+    implementation(libs.androidx.ui)
+    implementation(libs.androidx.animation)
+    testImplementation(libs.junit)
 }

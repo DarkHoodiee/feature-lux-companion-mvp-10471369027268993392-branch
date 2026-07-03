@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "com.lux.hoodie.renderer"
+    namespace = "com.lux.hoodie.events"
     compileSdk = 34
 
     defaultConfig {
@@ -19,20 +19,12 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
-    buildFeatures {
-        compose = true
-    }
-    composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.10"
-    }
 }
 
 dependencies {
     implementation(project(":domain"))
     implementation(libs.androidx.core.ktx)
-    implementation(platform(libs.androidx.compose.bom))
-    implementation(libs.androidx.ui)
-    implementation(libs.androidx.ui.graphics)
-    implementation(libs.androidx.material3)
+    implementation(libs.kotlinx.coroutines.android)
     testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
 }

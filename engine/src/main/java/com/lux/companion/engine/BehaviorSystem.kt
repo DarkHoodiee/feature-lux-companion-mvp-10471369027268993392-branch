@@ -4,8 +4,6 @@ import com.lux.companion.domain.LuxExpression
 import com.lux.companion.domain.LuxMood
 import kotlin.random.Random
 
-object BehaviorSystem {
-
 /**
  * Higher-level behavior logic.
  * Moves away from random weighted selection toward "Intentional Sequences".
@@ -54,9 +52,5 @@ object BehaviorSystem {
             random -= weight
         }
         return LuxExpression.NEUTRAL
-    }
-
-    fun getNextBehaviorDelay(): Long {
-        return Random.nextLong(3000, 8000)
     }
 }

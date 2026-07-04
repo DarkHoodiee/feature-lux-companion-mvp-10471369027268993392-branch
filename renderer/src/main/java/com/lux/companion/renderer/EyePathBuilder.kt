@@ -6,11 +6,24 @@ import com.lux.companion.domain.EyeGeometry
 /**
  * Constructs a Compose Path from EyeGeometry.
  * Uses a consistent topology of 4 cubic Bezier segments to ensure smooth morphing.
- * Refined for organic, non-angular contours.
+ * Refined for asymmetrical Canonical Neutral Eye (v3.1).
  */
 object EyePathBuilder {
 
+    private var cachedGeometry: EyeGeometry? = null
+    private var cachedPath: Path? = null
+
+    /**
+     * Builds or returns a cached Path for the given geometry.
+     * Note: Since Path is mutable, this assumes the consumer does not modify the result.
+     * In a multi-threaded environment, this would need synchronization, but here it's
+     * called from the single-threaded Compose DrawScope.
+     */
     fun buildEyePath(geometry: EyeGeometry): Path {
+        if (geometry == cachedGeometry) {
+            cachedPath?.let { return it }
+        }
+
         val path = Path()
         val w = geometry.width
         val h = geometry.height
@@ -18,54 +31,60 @@ object EyePathBuilder {
         val halfW = w / 2f
         val halfH = h / 2f
 
-        // Control point offsets for curvature (approx 0.552 for a circle)
-        // We use the curvature parameters to drive the handle lengths
-        val kUpper = 0.552f * geometry.upperCurve
-        val kLower = 0.552f * geometry.lowerCurve
+        // k-constant for circle approximation (0.5522)
+        val kBase = 0.5522f * geometry.softness
 
-        // Vertical positions
+        val kUpper = kBase * geometry.upperCurve
+        val kLower = kBase * geometry.lowerCurve
+
+        // Vertices
         val topY = -halfH
         val bottomY = halfH
-
-        // Horizontal positions
         val leftX = -halfW
         val rightX = halfW
 
-        // Apply Shear (skew)
+        val innerKMult = 1f - (geometry.innerTaper * 0.6f)
+        val outerKMult = 1f + (geometry.outerExpansion * 0.4f)
+
+        // Shear (skew)
         val topXOffset = geometry.shear * halfH
         val bottomXOffset = -geometry.shear * halfH
 
         path.moveTo(topXOffset, topY)
 
-        // Top-Right Quadrant
+        // 1. Top-Right (Outer Upper)
         path.cubicTo(
-            x1 = topXOffset + halfW * kUpper * (1f - geometry.outerCompression * 0.5f), y1 = topY,
-            x2 = rightX, y2 = -halfH * kUpper * (1f - geometry.outerCompression * 0.2f),
+            x1 = topXOffset + halfW * kUpper * outerKMult, y1 = topY,
+            x2 = rightX, y2 = -halfH * kUpper * outerKMult,
             x3 = rightX, y3 = 0f
         )
 
-        // Bottom-Right Quadrant
+        // 2. Bottom-Right (Outer Lower)
         path.cubicTo(
-            x1 = rightX, y1 = halfH * kLower * (1f - geometry.outerCompression * 0.2f),
-            x2 = bottomXOffset + halfW * kLower * (1f - geometry.outerCompression * 0.5f), y2 = bottomY,
+            x1 = rightX, y1 = halfH * kLower * outerKMult,
+            x2 = bottomXOffset + halfW * kLower * outerKMult, y2 = bottomY,
             x3 = bottomXOffset, y3 = bottomY
         )
 
-        // Bottom-Left Quadrant
+        // 3. Bottom-Left (Inner Lower)
         path.cubicTo(
-            x1 = bottomXOffset - halfW * kLower * (1f - geometry.innerCompression * 0.5f), y1 = bottomY,
-            x2 = leftX, y2 = halfH * kLower * (1f - geometry.innerCompression * 0.2f),
+            x1 = bottomXOffset - halfW * kLower * innerKMult, y1 = bottomY,
+            x2 = leftX, y2 = halfH * kLower * innerKMult,
             x3 = leftX, y3 = 0f
         )
 
-        // Top-Left Quadrant
+        // 4. Top-Left (Inner Upper)
         path.cubicTo(
-            x1 = leftX, y1 = -halfH * kUpper * (1f - geometry.innerCompression * 0.2f),
-            x2 = topXOffset - halfW * kUpper * (1f - geometry.innerCompression * 0.5f), y2 = topY,
+            x1 = leftX, y1 = -halfH * kUpper * innerKMult,
+            x2 = topXOffset - halfW * kUpper * innerKMult, y2 = topY,
             x3 = topXOffset, y3 = topY
         )
 
         path.close()
+
+        cachedGeometry = geometry
+        cachedPath = path
+
         return path
     }
 }

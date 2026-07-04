@@ -23,9 +23,9 @@ fun LuxFaceScreen(viewModel: LuxViewModel) {
             .background(Color(0xFF001219)) // Deep space blue/black
             .pointerInput(Unit) {
                 detectTapGestures(
-                    onTap = { viewModel.onInteraction(LuxInteraction.Tap) },
-                    onDoubleTap = { viewModel.onInteraction(LuxInteraction.DoubleTap) },
-                    onLongPress = { viewModel.onInteraction(LuxInteraction.LongPress) }
+                    onTap = { offset -> viewModel.onInteraction(LuxInteraction.Tap(offset.x, offset.y)) },
+                    onDoubleTap = { offset -> viewModel.onInteraction(LuxInteraction.DoubleTap(offset.x, offset.y)) },
+                    onLongPress = { offset -> viewModel.onInteraction(LuxInteraction.LongPress(offset.x, offset.y)) }
                 )
             }
     ) {

@@ -5,7 +5,6 @@ import androidx.lifecycle.viewModelScope
 import com.lux.companion.domain.LuxFaceState
 import com.lux.companion.domain.LuxInteraction
 import com.lux.companion.engine.AutonomousEngine
-import com.lux.companion.interaction.InteractionHandler
 import kotlinx.coroutines.flow.StateFlow
 
 class LuxViewModel : ViewModel() {
@@ -14,13 +13,7 @@ class LuxViewModel : ViewModel() {
 
     val uiState: StateFlow<LuxFaceState> = engine.state
 
-    private val interactionHandler = InteractionHandler { expression ->
-        engine.updateExpression(expression)
-    private val interactionHandler = InteractionHandler { _ ->
-        engine.onInteraction()
-    }
-
     fun onInteraction(interaction: LuxInteraction) {
-        interactionHandler.handleInteraction(interaction)
+        engine.onInteraction(interaction)
     }
 }

@@ -13,7 +13,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "LuxCompanionV2"
+rootProject.name = "LUX Hoodie"
 
 include(":app")
 include(":domain")

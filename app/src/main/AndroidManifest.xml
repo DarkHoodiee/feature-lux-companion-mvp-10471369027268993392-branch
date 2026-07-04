@@ -3,12 +3,15 @@
 
     <application
         android:allowBackup="true"
-        android:label="LUX"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.Lux">
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:screenOrientation="portrait"
             android:theme="@style/Theme.Lux">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

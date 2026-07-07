@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "com.lux.hoodie.renderer"
+    namespace = "com.lux.hoodie.behavior"
     compileSdk = 34
 
     defaultConfig {
@@ -29,6 +29,7 @@ android {
 
 dependencies {
     implementation(project(":domain"))
+    implementation(project(":animation"))
     implementation(libs.androidx.core.ktx)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.ui)

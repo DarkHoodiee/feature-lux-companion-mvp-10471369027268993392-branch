@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace = "com.lux.companion"
+    namespace = "com.lux.hoodie"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.lux.companion"
+        applicationId = "com.lux.hoodie"
         minSdk = 26
         targetSdk = 34
         versionCode = 1
@@ -30,11 +30,11 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_21
-        targetCompatibility = JavaVersion.VERSION_21
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions {
-        jvmTarget = "21"
+        jvmTarget = "17"
     }
     buildFeatures {
         compose = true
@@ -52,10 +52,13 @@ android {
 dependencies {
     implementation(project(":domain"))
     implementation(project(":renderer"))
+    implementation(project(":animation"))
+    implementation(project(":behavior"))
+    implementation(project(":attention"))
+    implementation(project(":events"))
+    implementation(project(":perception"))
     implementation(project(":engine"))
-    implementation(project(":interaction"))
-    implementation(project(":assistant"))
-    implementation(project(":widget"))
+    implementation(project(":ui"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
@@ -65,7 +68,6 @@ dependencies {
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
-    implementation(libs.androidx.appcompat)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

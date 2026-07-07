@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "com.lux.hoodie.renderer"
+    namespace = "com.lux.hoodie.ui"
     compileSdk = 34
 
     defaultConfig {

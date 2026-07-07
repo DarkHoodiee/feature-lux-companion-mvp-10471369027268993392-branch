@@ -13,12 +13,15 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "LuxCompanionV2"
+rootProject.name = "LUX Hoodie"
 
 include(":app")
 include(":domain")
 include(":renderer")
+include(":animation")
+include(":behavior")
+include(":attention")
+include(":events")
+include(":perception")
 include(":engine")
-include(":interaction")
-include(":assistant")
-include(":widget")
+include(":ui")

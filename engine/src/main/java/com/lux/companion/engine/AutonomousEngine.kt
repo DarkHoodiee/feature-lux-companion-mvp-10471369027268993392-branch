@@ -44,9 +44,7 @@ class AutonomousEngine(
     private suspend fun mainPlanningLoop() {
         while (true) {
             if (!executor.isReacting) {
-                // Thought -> Decision
                 val intention = planner.planNextIntention(_state.value.mood)
-                // Decision -> Behavior
                 executor.executeIntention(intention)
             }
             delay(BehaviorSystem.getNextBehaviorDelay())
@@ -55,10 +53,8 @@ class AutonomousEngine(
 
     private fun observeEvents() {
         EventBus.events.onEach { event ->
-            // Perception -> Context
             attention.processEvent(event)
 
-            // Reaction Logic
             when (event) {
                 is LuxEvent.Interaction -> executor.handleInteraction()
                 else -> {}
@@ -110,7 +106,7 @@ class AutonomousEngine(
     }
 
     fun updateExpression(expression: LuxExpression) {
-        animator.targetGeom = expression.toGeometry()
+        animator.targetTopology = expression.toTopology()
     }
 
     fun updateLookAt(x: Float, y: Float) {
@@ -127,7 +123,6 @@ class AutonomousEngine(
                 is LuxInteraction.RapidTaps -> LuxEvent.Interaction(com.lux.companion.domain.events.InteractionType.TAP)
             }
             EventBus.publish(event)
-            // For immediate feedback
             if (event is LuxEvent.Touch) {
                 EventBus.publish(LuxEvent.Interaction(com.lux.companion.domain.events.InteractionType.TAP))
             }

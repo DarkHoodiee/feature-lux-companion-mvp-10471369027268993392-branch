@@ -41,7 +41,6 @@ fun LuxFaceCanvas(
             }
 
             // 3. Hardware Overlays (Raster lines & Scanning)
-            // Raster is drawn over eyes to simulate the "through the glass" look
             drawRasterLines(masterScale)
 
             if (state.isScanning) {
@@ -57,7 +56,7 @@ private fun DrawScope.drawRasterLines(masterScale: Float) {
     var y = 0f
     while (y < size.height) {
         drawLine(
-            color = Color.Black.copy(alpha = alpha), // Dark lines for raster effect
+            color = Color.Black.copy(alpha = alpha),
             start = Offset(0f, y),
             end = Offset(size.width, y),
             strokeWidth = 1.5f * masterScale
@@ -71,10 +70,10 @@ private fun DrawScope.drawStartupSequence(state: LuxFaceState, centerX: Float, c
     val color = Color(0xFF00E5FF)
 
     when (state.startupPhase) {
-        StartupPhase.BOOT_DOT -> {
+        StartupPhase.CENTER_DOT -> {
             drawCircle(color = color, radius = 6f * masterScale, center = Offset(centerX, centerY))
         }
-        StartupPhase.EXPANSION_LINE -> {
+        StartupPhase.HORIZONTAL_EXPANSION -> {
             val lineWidth = size.width * progress
             drawLine(
                 color = color,
@@ -83,7 +82,7 @@ private fun DrawScope.drawStartupSequence(state: LuxFaceState, centerX: Float, c
                 strokeWidth = 3f * masterScale
             )
         }
-        StartupPhase.UPPER_SWEEP -> {
+        StartupPhase.SWEEP_UP_TOP -> {
             val y = centerY - (centerY * progress)
             drawLine(
                 color = color,
@@ -92,8 +91,8 @@ private fun DrawScope.drawStartupSequence(state: LuxFaceState, centerX: Float, c
                 strokeWidth = 2.5f * masterScale
             )
         }
-        StartupPhase.LOWER_SWEEP -> {
-            val y = size.height - (centerY * progress)
+        StartupPhase.NEW_LINE_BOTTOM -> {
+            val y = size.height - (size.height * 0.1f * progress)
             drawLine(
                 color = color,
                 start = Offset(0f, y),
@@ -101,11 +100,14 @@ private fun DrawScope.drawStartupSequence(state: LuxFaceState, centerX: Float, c
                 strokeWidth = 2.5f * masterScale
             )
         }
-        StartupPhase.EYE_MATERIALIZING -> {
-            drawEyes(state.copy(
-                leftEye = state.leftEye.copy(glowIntensity = progress),
-                rightEye = state.rightEye.copy(glowIntensity = progress)
-            ), centerX, centerY, masterScale)
+        StartupPhase.SWEEP_UP_REVEAL -> {
+            val scanY = size.height * (1f - progress)
+            withTransform({
+                clipRect(left = 0f, top = scanY, right = size.width, bottom = size.height, clipOp = ClipOp.Intersect)
+            }) {
+                drawEyes(state, centerX, centerY, masterScale)
+            }
+            drawLine(color = color, start = Offset(0f, scanY), end = Offset(size.width, scanY), strokeWidth = 8f * masterScale)
         }
         else -> {}
     }
@@ -115,7 +117,6 @@ private fun DrawScope.drawVisorDepth(state: LuxFaceState, centerX: Float, center
     val avgLookX = (state.leftEye.lookAtX + state.rightEye.lookAtX) / 2f
     val avgLookY = (state.leftEye.lookAtY + state.rightEye.lookAtY) / 2f
 
-    // Visor depth reflection (very subtle)
     drawCircle(
         color = Color(0xFF0D47A1).copy(alpha = 0.08f),
         radius = 480f * masterScale,
@@ -130,37 +131,25 @@ private fun DrawScope.drawEyes(state: LuxFaceState, centerX: Float, centerY: Flo
 }
 
 private fun DrawScope.drawEye(eyeState: EyeState, center: Offset, isLeft: Boolean, masterScale: Float) {
-    val scaledGeometry = eyeState.geometry.copy(
-        width = eyeState.geometry.width * masterScale,
-        height = eyeState.geometry.height * masterScale
-    )
-    val path = EyePathBuilder.buildEyePath(scaledGeometry)
+    val path = EyePathBuilder.buildEyePath(eyeState.topology)
     val lookOffsetX = eyeState.lookAtX * 55f * masterScale
     val lookOffsetY = eyeState.lookAtY * 45f * masterScale
 
     withTransform({
         translate(center.x + lookOffsetX, center.y + lookOffsetY)
+        scale(masterScale, masterScale, Offset.Zero)
         if (isLeft) scale(-1f, 1f, Offset.Zero)
-        rotate(eyeState.geometry.tilt, Offset.Zero)
+        rotate(eyeState.topology.tilt, Offset.Zero)
         if (eyeState.isBlinking) scale(1f, 1f - eyeState.blinkProgress, Offset.Zero)
     }) {
-        val eyeColor = Color(0xFF00A8E8) // Electronic Cerulean
+        val eyeColor = Color(0xFF00A8E8)
         val glow = eyeState.glowIntensity
 
-        // 1. Core (White/Luminous center)
         drawPath(path = path, color = Color.White.copy(alpha = 0.25f * glow))
-
-        // 2. Main Emissive Base
         drawPath(path = path, color = eyeColor, alpha = 0.85f * glow)
-
-        // 3. Inner Bloom (Tight)
-        drawPath(path = path, color = eyeColor.copy(alpha = 0.4f * glow), style = Stroke(width = 10f * masterScale))
-
-        // 4. Mid Bloom (Soft)
-        drawPath(path = path, color = eyeColor.copy(alpha = 0.18f * glow), style = Stroke(width = 28f * masterScale))
-
-        // 5. Outer Ambient Halo (Broad)
-        drawPath(path = path, color = eyeColor.copy(alpha = 0.06f * glow), style = Stroke(width = 55f * masterScale))
+        drawPath(path = path, color = eyeColor.copy(alpha = 0.4f * glow), style = Stroke(width = 10f))
+        drawPath(path = path, color = eyeColor.copy(alpha = 0.18f * glow), style = Stroke(width = 28f))
+        drawPath(path = path, color = eyeColor.copy(alpha = 0.06f * glow), style = Stroke(width = 55f))
     }
 }
 

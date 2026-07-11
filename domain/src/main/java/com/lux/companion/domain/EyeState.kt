@@ -4,7 +4,7 @@ data class EyeState(
     val expression: LuxExpression = LuxExpression.NEUTRAL,
     val scaleX: Float = 1f,
     val scaleY: Float = 1f,
-    val geometry: EyeGeometry = EyeGeometry(),
+    val topology: EyeTopology = EyeTopology(),
     val lookAtX: Float = 0f, // -1f to 1f
     val lookAtY: Float = 0f, // -1f to 1f
     val isBlinking: Boolean = false,

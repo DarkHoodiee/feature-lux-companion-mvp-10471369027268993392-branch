@@ -1,76 +1,87 @@
 package com.lux.companion.engine.animation
 
-import com.lux.companion.domain.EyeGeometry
-import com.lux.companion.domain.EyePresets
-import com.lux.companion.domain.EyeState
+import com.lux.companion.domain.EyeTopology
 import com.lux.companion.domain.LuxFaceState
 import com.lux.companion.engine.SpringSolver
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /**
- * Manages the physics-based animation ticker for LUX.
- * Decouples spring simulation from behavioral logic.
+ * Orchestrates physics-based transitions for LUX's face.
+ * Drives EyeTopology and spatial parameters using SpringSolver.
  */
 class FaceAnimator(
     private val scope: CoroutineScope,
-    private val stateFlow: MutableStateFlow<LuxFaceState>
+    private val state: MutableStateFlow<LuxFaceState>
 ) {
-    private val lookXSpring = SpringSolver(stiffness = 120f, dampingRatio = 0.6f)
-    private val lookYSpring = SpringSolver(stiffness = 120f, dampingRatio = 0.6f)
+    private val tickerPeriod = 16L // ~60fps
+    private val dt = tickerPeriod / 1000f
 
-    private val widthSpring = SpringSolver(stiffness = 180f, dampingRatio = 0.75f)
-    private val heightSpring = SpringSolver(stiffness = 180f, dampingRatio = 0.75f)
-    private val upperCurveSpring = SpringSolver(stiffness = 150f, dampingRatio = 0.7f)
-    private val lowerCurveSpring = SpringSolver(stiffness = 150f, dampingRatio = 0.7f)
-    private val innerTaperSpring = SpringSolver(stiffness = 150f, dampingRatio = 0.7f)
-    private val outerExpansionSpring = SpringSolver(stiffness = 150f, dampingRatio = 0.7f)
-    private val softnessSpring = SpringSolver(stiffness = 150f, dampingRatio = 0.7f)
-    private val tiltSpring = SpringSolver(stiffness = 120f, dampingRatio = 0.65f)
-    private val shearSpring = SpringSolver(stiffness = 120f, dampingRatio = 0.65f)
+    // Targets
+    var targetTopology: EyeTopology = EyeTopology()
+    var targetLookX = 0f
+    var targetLookY = 0f
+    var targetRotationZ = 0f
 
-    var targetGeom: EyeGeometry = EyePresets.NEUTRAL
-    var targetLookX: Float = 0f
-    var targetLookY: Float = 0f
+    // Spring Solvers for Topology parameters
+    private val widthSpring = SpringSolver(stiffness = 150f, dampingRatio = 0.7f)
+    private val heightSpring = SpringSolver(stiffness = 150f, dampingRatio = 0.7f)
+    private val upperCurveSpring = SpringSolver(stiffness = 120f, dampingRatio = 0.6f)
+    private val lowerCurveSpring = SpringSolver(stiffness = 120f, dampingRatio = 0.6f)
+    private val innerCompSpring = SpringSolver(stiffness = 140f, dampingRatio = 0.75f)
+    private val outerExpSpring = SpringSolver(stiffness = 140f, dampingRatio = 0.75f)
+    private val cornerPinchSpring = SpringSolver(stiffness = 180f, dampingRatio = 0.8f)
+    private val taperSpring = SpringSolver(stiffness = 130f, dampingRatio = 0.7f)
+    private val softnessSpring = SpringSolver(stiffness = 100f, dampingRatio = 0.9f)
+    private val upperLidSpring = SpringSolver(stiffness = 200f, dampingRatio = 0.85f)
+    private val lowerLidSpring = SpringSolver(stiffness = 200f, dampingRatio = 0.85f)
+    private val tiltSpring = SpringSolver(stiffness = 110f, dampingRatio = 0.7f)
+
+    // Spatial Springs
+    private val lookXSpring = SpringSolver(stiffness = 180f, dampingRatio = 0.8f)
+    private val lookYSpring = SpringSolver(stiffness = 180f, dampingRatio = 0.8f)
+    private val rotationSpring = SpringSolver(stiffness = 90f, dampingRatio = 0.6f)
 
     fun start() {
         scope.launch {
-            val dt = 0.016f // ~60fps
-            while (true) {
-                stateFlow.update { currentState ->
-                    val newLookX = lookXSpring.next(currentState.leftEye.lookAtX, targetLookX, dt)
-                    val newLookY = lookYSpring.next(currentState.leftEye.lookAtY, targetLookY, dt)
+            while (isActive) {
+                state.update { current ->
+                    val currentGeom = current.leftEye.topology
 
-                    val currentGeom = currentState.leftEye.geometry
-                    val newGeom = EyeGeometry(
-                        width = widthSpring.next(currentGeom.width, targetGeom.width, dt),
-                        height = heightSpring.next(currentGeom.height, targetGeom.height, dt),
-                        upperCurve = upperCurveSpring.next(currentGeom.upperCurve, targetGeom.upperCurve, dt),
-                        lowerCurve = lowerCurveSpring.next(currentGeom.lowerCurve, targetGeom.lowerCurve, dt),
-                        innerTaper = innerTaperSpring.next(currentGeom.innerTaper, targetGeom.innerTaper, dt),
-                        outerExpansion = outerExpansionSpring.next(currentGeom.outerExpansion, targetGeom.outerExpansion, dt),
-                        softness = softnessSpring.next(currentGeom.softness, targetGeom.softness, dt),
-                        tilt = tiltSpring.next(currentGeom.tilt, targetGeom.tilt, dt),
-                        shear = shearSpring.next(currentGeom.shear, targetGeom.shear, dt)
+                    val nextTopology = EyeTopology(
+                        widthScale = widthSpring.next(currentGeom.widthScale, targetTopology.widthScale, dt),
+                        heightScale = heightSpring.next(currentGeom.heightScale, targetTopology.heightScale, dt),
+                        upperCurve = upperCurveSpring.next(currentGeom.upperCurve, targetTopology.upperCurve, dt),
+                        lowerCurve = lowerCurveSpring.next(currentGeom.lowerCurve, targetTopology.lowerCurve, dt),
+                        innerCompression = innerCompSpring.next(currentGeom.innerCompression, targetTopology.innerCompression, dt),
+                        outerExpansion = outerExpSpring.next(currentGeom.outerExpansion, targetTopology.outerExpansion, dt),
+                        cornerPinch = cornerPinchSpring.next(currentGeom.cornerPinch, targetTopology.cornerPinch, dt),
+                        taper = taperSpring.next(currentGeom.taper, targetTopology.taper, dt),
+                        softness = softnessSpring.next(currentGeom.softness, targetTopology.softness, dt),
+                        upperLidInset = upperLidSpring.next(currentGeom.upperLidInset, targetTopology.upperLidInset, dt),
+                        lowerLidInset = lowerLidSpring.next(currentGeom.lowerLidInset, targetTopology.lowerLidInset, dt),
+                        tilt = tiltSpring.next(currentGeom.tilt, targetTopology.tilt, dt)
                     )
 
-                    currentState.copy(
-                        leftEye = currentState.leftEye.copy(
-                            lookAtX = newLookX,
-                            lookAtY = newLookY,
-                            geometry = newGeom
+                    current.copy(
+                        leftEye = current.leftEye.copy(
+                            topology = nextTopology,
+                            lookAtX = lookXSpring.next(current.leftEye.lookAtX, targetLookX, dt),
+                            lookAtY = lookYSpring.next(current.leftEye.lookAtY, targetLookY, dt)
                         ),
-                        rightEye = currentState.rightEye.copy(
-                            lookAtX = newLookX + (newLookX * 0.03f),
-                            lookAtY = newLookY,
-                            geometry = newGeom
-                        )
+                        rightEye = current.rightEye.copy(
+                            topology = nextTopology,
+                            lookAtX = lookXSpring.next(current.rightEye.lookAtX, targetLookX, dt),
+                            lookAtY = lookYSpring.next(current.rightEye.lookAtY, targetLookY, dt)
+                        ),
+                        rotationZ = rotationSpring.next(current.rotationZ, targetRotationZ, dt)
                     )
                 }
-                delay(16)
+                delay(tickerPeriod)
             }
         }
     }

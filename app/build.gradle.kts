@@ -54,8 +54,6 @@ dependencies {
     implementation(project(":renderer"))
     implementation(project(":engine"))
     implementation(project(":interaction"))
-    implementation(project(":assistant"))
-    implementation(project(":widget"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)

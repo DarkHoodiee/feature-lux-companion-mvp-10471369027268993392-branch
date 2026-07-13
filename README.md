@@ -14,7 +14,7 @@ The project follows a strict 7-layer hierarchy:
 
 ## Key Features
 - **Canonical Neutral Eye**: Asymmetrical leaf-profile topology.
-- **Hardware Startup**: Cinematic 7-phase boot sequence.
+- **Hardware Startup**: Cinematic 6-phase boot sequence.
 - **Hardware Raster**: Horizontal scanlines for display depth.
 - **Dynamic Glow**: 5-layer emissive bloom model.
 
@@ -37,10 +37,6 @@ Alternatively, via command line:
 ```
 
 ## Documentation
-- [Cognitive Architecture](LUX_Cognitive_Architecture_v4.md)
-- [Goal System](Goal_System.md)
-- [Memory Model](Memory_Model.md)
-- [Motivation Model](Motivation_Model.md)
 
 ## License
 MIT License. See [LICENSE](LICENSE) for details.
